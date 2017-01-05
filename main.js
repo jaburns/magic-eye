@@ -75,7 +75,6 @@
                 for (let i = 0; i < 4; i++) {
                     pixels[pixelOffset + i] = same[x] === x
                         ? rgba[i]
-                        //: [255,255,255,255][i] //pixels[(y * width * 4) + (same[x] * 4) + i];
                         : pixels[(y * width * 4) + (same[x] * 4) + i];
                 }
             }
@@ -89,32 +88,17 @@
         const same = new Uint16Array(width);
 
         for (let x = 0; x < width; x++) {
-            same[x] = x;
-        }
-
-        for (let x = 0; x < width; x++) {
             const z = depthMapRow[x];
             const sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
+            const left = Math.round(x - sep / 2);
+            const right = left + sep;
 
-            let left = Math.round(x - sep / 2);
-            let right = left + sep;
-
-            if (0 <= left && right < width) {
-                let k;
-
-                do {
-                    k = same[left];
-
-                    if (k < right) {
-                        left = k;
-                    } else {
-                        left = right;
-                        right = k;
-                    }
-                }
-                while (k !== left && k !== right);
-
+            if (left >= 0 && right < width) {
                 same[right] = left;
+            }
+
+            if (same[x] === 0) {
+                same[x] = x;
             }
         }
 
