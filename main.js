@@ -100,7 +100,11 @@
             let right = left + sep;
 
             if (0 <= left && right < width) {
-                for (let k = same[left]; k !== left && k !== right; k = same[left]) {
+                let k;
+
+                do {
+                    k = same[left];
+
                     if (k < right) {
                         left = k;
                     } else {
@@ -108,6 +112,8 @@
                         right = k;
                     }
                 }
+                while (k !== left && k !== right);
+
                 same[right] = left;
             }
         }
