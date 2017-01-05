@@ -57,66 +57,74 @@
 
     const DPI = 72; // assuming output of 72 dots per inch
     const EYE_SEP = Math.round(2.5 * DPI); // eye separation assumed to be 2.5 inches
-    const MU = (1 / 3); // depth of field (fraction of viewing distance)
+    const MU = (1 / 2); // depth of field
 
     function generatePixelData(opts) {
-        let width = opts.width;
-        let height = opts.height;
-        let depthMap = opts.depthMap;
-        let pixels = new Uint8ClampedArray(width * height * 4);
+        const width = opts.width;
+        const height = opts.height;
+        const depthMap = opts.depthMap;
+        const pixels = new Uint8ClampedArray(width * height * 4);
 
         for (let y = 0; y < height; y++) {
-            let same = new Uint16Array(width);
+            const same = computeRow(depthMap[y], y & 1);
 
             for (let x = 0; x < width; x++) {
-                same[x] = x;
-            }
-
-            for (let x = 0; x < width; x++) {
-                let z = depthMap[y][x];
-
-                let sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
-                let left = Math.round(x - ((sep + (sep & y & 1)) / 2));
-                let right = left + sep;
-
-                if (0 <= left && right < width) {
-                    let t = 1;
-                    let zt = 0;
-                    let visible = true;
-
-                    do {
-                        zt = z + (2 * (2 - (MU * z)) * t / (MU * EYE_SEP));
-                        visible = (depthMap[y][x-t] < zt) && (depthMap[y][x+t] < zt);
-                        t++;
-                    } while (visible && zt < 1);
-
-                    if (visible) {
-                        for (let k = same[left]; k !== left && k !== right; k = same[left]) {
-                            if (k < right) {
-                                left = k;
-                            } else {
-                                left = right;
-                                right = k;
-                            }
-                        }
-                        same[left] = right;
-                    }
-                }
-            }
-
-            for (let x = (width - 1); x >= 0; x--) {
-                let pixelOffset = (y * width * 4) + (x * 4);
-                let rgba = opts.colors[Math.floor(Math.random() * opts.colors.length)];
+                const pixelOffset = (y * width * 4) + (x * 4);
+                const rgba = opts.colors[Math.floor(Math.random() * opts.colors.length)];
 
                 for (let i = 0; i < 4; i++) {
                     pixels[pixelOffset + i] = same[x] === x
                         ? rgba[i]
+                        //: [255,255,255,255][i] //pixels[(y * width * 4) + (same[x] * 4) + i];
                         : pixels[(y * width * 4) + (same[x] * 4) + i];
                 }
             }
         }
 
         return pixels;
+    }
+
+    function computeRow(depthMapRow, yOdd) {
+        const width = depthMapRow.length;
+        const same = new Uint16Array(width);
+
+        for (let x = 0; x < width; x++) {
+            same[x] = x;
+        }
+
+        for (let x = 0; x < width; x++) {
+            let z = depthMapRow[x];
+
+            let sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
+            let left = Math.round(x - ((sep + (sep & yOdd)) / 2));
+            let right = left + sep;
+
+            if (0 <= left && right < width) {
+                let t = 1;
+                let zt = 0;
+                let visible = true;
+
+                do {
+                    zt = z + (2 * (2 - (MU * z)) * t / (MU * EYE_SEP));
+                    visible = (depthMapRow[x-t] < zt) && (depthMapRow[x+t] < zt);
+                    t++;
+                } while (visible && zt < 1);
+
+                if (visible) {
+                    for (let k = same[left]; k !== left && k !== right; k = same[left]) {
+                        if (k < right) {
+                            left = k;
+                        } else {
+                            left = right;
+                            right = k;
+                        }
+                    }
+                    same[right] = left;
+                }
+            }
+        }
+
+        return same;
     }
 
     setTimeout(render, 1000);
