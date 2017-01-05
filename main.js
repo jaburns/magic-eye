@@ -66,7 +66,7 @@
         const pixels = new Uint8ClampedArray(width * height * 4);
 
         for (let y = 0; y < height; y++) {
-            const same = computeRow(depthMap[y]);
+            const same = computeRowGather(depthMap[y]);
 
             for (let x = 0; x < width; x++) {
                 const pixelOffset = (y * width * 4) + (x * 4);
@@ -93,6 +93,10 @@
             const left = Math.round(x - sep / 2);
             const right = left + sep;
 
+            if (sep > maxSep) {
+                maxSep = sep;
+            }
+
             if (left >= 0 && right < width) {
                 same[right] = left;
             }
@@ -103,6 +107,38 @@
         }
 
         return same;
+    }
+
+
+    function computeRowGather(depthMapRow) {
+        const width = depthMapRow.length;
+        const same = new Uint16Array(width);
+
+        for (let x = 0; x < width; x++) {
+            same[x] = computePixelGather(depthMapRow, x);
+        }
+
+        return same;
+    }
+
+    function computePixelGather(depthMapRow, x) {
+        let result = x;
+
+        for (let i = Math.floor(x - EYE_SEP / 4); i <= x; i++) {
+            if (i < 0) continue;
+            const z = depthMapRow[i];
+            const sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
+            const left = Math.round(i - sep / 2);
+            const right = left + sep;
+
+            if (left < 0) continue;
+            if (right !== x) continue;
+
+            return left;
+            result = left;
+        }
+
+        return result;
     }
 
     setTimeout(render, 1000);
