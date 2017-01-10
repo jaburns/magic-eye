@@ -11,6 +11,7 @@
             Fog { Mode Off }
 
             CGPROGRAM
+
             #include "UnityCG.cginc"
             #pragma vertex vert
             #pragma fragment frag
@@ -31,11 +32,26 @@
                 return o;
             }
 
+            float4 originalColor(float2 screenPixel) 
+            {
+                float col = (((511+screenPixel.x) * (571+screenPixel.y)) % 1000) / 1000;
+                return float4(col, col, col, 1);
+            }
+
             float4 frag(v2f inp) : SV_Target
             {
-                float4 col = tex2D(_MainTex, inp.uv);
-                return float4(col.r, 0, 0, 1);
+                float2 screenPixel = floor(_ScreenParams.xy * inp.uv);
+
+                float ox = screenPixel.x;
+                for (float i = 0; i < 20; i += 1) {
+                    float sample = floor(_ScreenParams.x * tex2D(_MainTex, float2(ox / _ScreenParams.x, inp.uv.y)).r);
+                    if (abs(ox - sample) < 0.1) break;
+                    ox = sample;
+                }
+
+                return originalColor(float2(ox, screenPixel.y));
             }
+
             ENDCG
         }
     }

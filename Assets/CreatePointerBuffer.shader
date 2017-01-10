@@ -11,6 +11,7 @@
             Fog { Mode Off }
 
             CGPROGRAM
+
             #include "UnityCG.cginc"
             #pragma vertex vert
             #pragma fragment frag
@@ -38,8 +39,9 @@
             }
 
             // screenPos range is [0,1] on both axes
-            float getDepth(float2 screenPos) {
-                return Linear01Depth(tex2Dproj(_CameraDepthTexture, UNITY_PROJ_COORD(
+            float getDepth(float2 screenPos) 
+            {
+                return 1 - Linear01Depth(tex2Dproj(_CameraDepthTexture, UNITY_PROJ_COORD(
                     float4(screenPos.x, screenPos.y, 0, 1)
                 )).r);
             }
@@ -68,6 +70,7 @@
 
                 return float4(ret, ret, ret, 1);
             }
+
             ENDCG
         }
     }
