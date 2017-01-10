@@ -11,7 +11,7 @@
         const depthMap = getDepthMapFromCanvas(sourceCanvas);
         const colors = generatePalette(10);
 
-        const pixelData = generatePixelData({
+        const pixelData = generatePixelDataGather({
             width: destCanvas.width,
             height: destCanvas.height,
             depthMap: depthMap,
@@ -55,9 +55,13 @@
         return depthMap;
     }
 
+// ----------------------------------------------------------------------------
+
     const DPI = 72; // assuming output of 72 dots per inch
     const EYE_SEP = Math.round(2.5 * DPI); // eye separation assumed to be 2.5 inches
     const MU = (1 / 2); // depth of field
+
+// ----------------------------------------------------------------------------
 
     function generatePixelData(opts) {
         const width = opts.width;
@@ -66,7 +70,7 @@
         const pixels = new Uint8ClampedArray(width * height * 4);
 
         for (let y = 0; y < height; y++) {
-            const same = computeRowGather(depthMap[y]);
+            const same = computeRow(depthMap[y]);
 
             for (let x = 0; x < width; x++) {
                 const pixelOffset = (y * width * 4) + (x * 4);
@@ -93,10 +97,6 @@
             const left = Math.round(x - sep / 2);
             const right = left + sep;
 
-            if (sep > maxSep) {
-                maxSep = sep;
-            }
-
             if (left >= 0 && right < width) {
                 same[right] = left;
             }
@@ -109,6 +109,70 @@
         return same;
     }
 
+// ----------------------------------------------------------------------------
+
+    function originalColor(x, y) {
+        const M = 4294967296;
+        const A = 1664525;
+        const C = 1013904223;
+
+        function next(seed) {
+            return (A * seed + C) % M;
+        }
+        function value(seed) {
+            return seed / M;
+        }
+
+        const fst = next(x ^ y);
+
+        return [
+            Math.floor(255*value(next(fst))),
+            Math.floor(255*value(next(next(fst)))),
+            Math.floor(255*value(fst)),
+            255
+        ];
+    }
+
+    function generatePixelDataGather(opts) {
+        const width = opts.width;
+        const height = opts.height;
+        const depthMap = opts.depthMap;
+        const pixels = new Uint8ClampedArray(width * height * 4);
+
+        let maxSame = 0;
+
+        for (let y = 0; y < height; y++) {
+            const same = computeRowGather(depthMap[y]);
+
+            const offsetLookup = x =>
+                (y * width * 4) + (x * 4);
+
+            for (let x = 0; x < width; x++) {
+                let sameCounter = 0;
+                let yy = x;
+                while (same[yy] !== y) {
+                    yy = same[yy];
+                    sameCounter++;
+                    if (sameCounter > 500) break;
+                }
+                if (sameCounter > maxSame) {
+                    maxSame = sameCounter;
+                }
+
+                const oc = originalColor(x, y)
+
+                for (let i = 0; i < 4; i++) {
+                    pixels[offsetLookup(x) + i] = same[x] === x
+                        ? oc[i]
+                        : pixels[offsetLookup(same[x]) + i];
+                }
+            }
+        }
+
+        console.log(maxSame);
+
+        return pixels;
+    }
 
     function computeRowGather(depthMapRow) {
         const width = depthMapRow.length;
