@@ -1,11 +1,13 @@
 ﻿using UnityEngine;
-using System.Collections;
 
 public class MagicEyeCamera : MonoBehaviour
 {
-    [SerializeField] Shader _shader;
+    [SerializeField] Shader _createPointerBuffer;
+    [SerializeField] Shader _mainEffect;
 
-    Material _material;
+    Material _createPointerBufferMat;
+    Material _mainEffectMat;
+
     Camera _camera;
 
     void Awake ()
@@ -13,11 +15,15 @@ public class MagicEyeCamera : MonoBehaviour
         _camera = GetComponent<Camera>();
         _camera.depthTextureMode = DepthTextureMode.Depth;
 
-        _material = new Material(_shader);
+        _createPointerBufferMat = new Material(_createPointerBuffer);
+        _mainEffectMat = new Material(_mainEffect);
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        Graphics.Blit(source, destination, _material);
+        var temp = RenderTexture.GetTemporary(source.width, source.height, 24, RenderTextureFormat.ARGBFloat);
+        Graphics.Blit(source, temp, _createPointerBufferMat);
+        Graphics.Blit(temp, destination, _mainEffectMat);
+        RenderTexture.ReleaseTemporary(temp);
     }
 }
