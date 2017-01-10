@@ -9,14 +9,8 @@
         sourceCanvas.getContext('2d').drawImage(sourceImage, 0, 0);
 
         const depthMap = getDepthMapFromCanvas(sourceCanvas);
-        const colors = generatePalette(10);
-
-        const pixelData = generatePixelDataGather({
-            width: destCanvas.width,
-            height: destCanvas.height,
-            depthMap: depthMap,
-            colors: colors
-        });
+        const sameMap = computeFirstPass(depthMap);
+        const pixelData = computePixels(sameMap);
 
         const destContext = destCanvas.getContext('2d'),
         imageData = destContext.createImageData(destCanvas.width, destCanvas.height);
@@ -63,68 +57,13 @@
 
 // ----------------------------------------------------------------------------
 
-    function generatePixelData(opts) {
-        const width = opts.width;
-        const height = opts.height;
-        const depthMap = opts.depthMap;
-        const pixels = new Uint8ClampedArray(width * height * 4);
-
-        for (let y = 0; y < height; y++) {
-            const same = computeRow(depthMap[y]);
-
-            for (let x = 0; x < width; x++) {
-                const pixelOffset = (y * width * 4) + (x * 4);
-                const rgba = opts.colors[Math.floor(Math.random() * opts.colors.length)];
-
-                for (let i = 0; i < 4; i++) {
-                    pixels[pixelOffset + i] = same[x] === x
-                        ? rgba[i]
-                        : pixels[(y * width * 4) + (same[x] * 4) + i];
-                }
-            }
-        }
-
-        return pixels;
-    }
-
-    function computeRow(depthMapRow) {
-        const width = depthMapRow.length;
-        const same = new Uint16Array(width);
-
-        for (let x = 0; x < width; x++) {
-            const z = depthMapRow[x];
-            const sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
-            const left = Math.round(x - sep / 2);
-            const right = left + sep;
-
-            if (left >= 0 && right < width) {
-                same[right] = left;
-            }
-
-            if (same[x] === 0) {
-                same[x] = x;
-            }
-        }
-
-        return same;
-    }
-
-// ----------------------------------------------------------------------------
-
     function originalColor(x, y) {
         const M = 4294967296;
         const A = 1664525;
         const C = 1013904223;
-
-        function next(seed) {
-            return (A * seed + C) % M;
-        }
-        function value(seed) {
-            return seed / M;
-        }
-
+        function next(seed) { return (A * seed + C) % M; }
+        function value(seed) { return seed / M; }
         const fst = next(x ^ y);
-
         return [
             Math.floor(255*value(next(fst))),
             Math.floor(255*value(next(next(fst)))),
@@ -133,76 +72,58 @@
         ];
     }
 
-    function generatePixelDataGather(opts) {
-        const width = opts.width;
-        const height = opts.height;
-        const depthMap = opts.depthMap;
+    function computePixels(sameMap) {
+        const width = sameMap[0].length;
+        const height = sameMap.length;
         const pixels = new Uint8ClampedArray(width * height * 4);
 
-        let maxSame = 0;
-
         for (let y = 0; y < height; y++) {
-            const same = computeRowGather(depthMap[y]);
-
-            const offsetLookup = x =>
-                (y * width * 4) + (x * 4);
-
             for (let x = 0; x < width; x++) {
-                let sameCounter = 0;
-                let yy = x;
-                while (same[yy] !== y) {
-                    yy = same[yy];
-                    sameCounter++;
-                    if (sameCounter > 500) break;
-                }
-                if (sameCounter > maxSame) {
-                    maxSame = sameCounter;
+                let ox = x;
+                for (let i = 0; i < 20; ++i) {
+                    if (sameMap[y][ox] === ox) break;
+                    ox = sameMap[y][ox];
                 }
 
-                const oc = originalColor(x, y)
-
-                for (let i = 0; i < 4; i++) {
-                    pixels[offsetLookup(x) + i] = same[x] === x
-                        ? oc[i]
-                        : pixels[offsetLookup(same[x]) + i];
-                }
+                const col = originalColor(ox, y);
+                pixels[(y * width * 4) + (x * 4) + 0] = col[0];
+                pixels[(y * width * 4) + (x * 4) + 1] = col[1];
+                pixels[(y * width * 4) + (x * 4) + 2] = col[2];
+                pixels[(y * width * 4) + (x * 4) + 3] = col[3];
             }
         }
-
-        console.log(maxSame);
 
         return pixels;
     }
 
-    function computeRowGather(depthMapRow) {
-        const width = depthMapRow.length;
-        const same = new Uint16Array(width);
+    function computeFirstPass(depthMap) {
+        const width = depthMap[0].length;
+        const height = depthMap.length;
+        const sameMap = new Array(height);
 
-        for (let x = 0; x < width; x++) {
-            same[x] = computePixelGather(depthMapRow, x);
+        for (let y = 0; y < height; y++) {
+            sameMap[y] = new Array(width);
+            for (let x = 0; x < width; x++) {
+                sameMap[y][x] = x;
+
+                for (let it = -Math.floor(EYE_SEP / 4); it <= 0; it++) {
+                    const i = x + it;
+                    if (i < 0) continue;
+                    const z = depthMap[y][x];
+                    const sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
+                    const left = Math.round(i - sep / 2);
+                    const right = left + sep;
+
+                    if (left < 0) continue;
+                    if (right !== x) continue;
+
+                    sameMap[y][x] = left;
+                    break;
+                }
+            }
         }
 
-        return same;
-    }
-
-    function computePixelGather(depthMapRow, x) {
-        let result = x;
-
-        for (let i = Math.floor(x - EYE_SEP / 4); i <= x; i++) {
-            if (i < 0) continue;
-            const z = depthMapRow[i];
-            const sep = Math.round((1 - (MU * z)) * EYE_SEP / (2 - (MU * z)));
-            const left = Math.round(i - sep / 2);
-            const right = left + sep;
-
-            if (left < 0) continue;
-            if (right !== x) continue;
-
-            return left;
-            result = left;
-        }
-
-        return result;
+        return sameMap;
     }
 
     setTimeout(render, 1000);
